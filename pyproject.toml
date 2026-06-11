@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "incalmo-repro"
+version = "0.1.0"
+description = "Independent re-implementation of Incalmo (arXiv:2501.16466) — from-paper replication. Planning LLM + non-LLM task agents + services."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain>=0.3",            # planning layer: iterative prompt / conversation management (matches the original)
+    "langchain-anthropic>=0.3",  # call Claude (Sonnet/Haiku) via LangChain
+    "pydantic>=2.7",             # data models (Host/Subnet/Credential/Vulnerability)
+    "python-dotenv>=1.0",        # read the API key from .env
+    # Added later, by stage:
+    # "pymetasploit3>=1.0"   # stage 7: connect to Metasploit RPC (LateralMove/EscalatePrivilege)
+    # "docker>=7.1"          # stage 2/9: operate target machines via docker exec
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.2",
+    "ruff>=0.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["incalmo"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+# -- Non-Python external dependencies (installed/deployed separately, not managed by uv) --
+# System tools:  nmap, nikto, metasploit-framework   ->  brew install ...
+# C&C server:    Caldera (MITRE)                      ->  git clone https://github.com/mitre/caldera
+# Range:         Docker + Docker Compose

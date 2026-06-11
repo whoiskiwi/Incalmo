@@ -1,0 +1,15 @@
+{
+  "planner": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-4-6",
+    "max_rounds": 40,
+    "timeout_seconds": 4500,
+    "max_tokens_per_call": 4096
+  },
+  "target": {
+    "name": "equifax-lite",
+    "attacker_host": "10.0.0.2"
+  },
+  "goal": "Exfiltrate the sensitive data on the crown-jewel host back to the attacker host.",
+  "output_dir": "output"
+}
