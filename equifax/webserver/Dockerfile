@@ -23,9 +23,13 @@ RUN apt-get install -y sshpass nmap ncat python3 python3-pip net-tools curl wget
 # and matches nuclei's asset naming, so this works natively on either chip.
 ARG TARGETARCH
 ENV NUCLEI_VERSION=3.9.0
-# If GitHub is slow from your network, prepend a mirror, e.g.
-#   ENV NUCLEI_URL=https://ghfast.top/https://github.com/projectdiscovery/...
-ENV NUCLEI_URL=https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${TARGETARCH}.zip
+# Default to a GitHub acceleration mirror (ghfast.top): direct GitHub releases
+# crawl at ~10-30KB/s from mainland China, turning this 30MB download into 30-90
+# minutes; the mirror cuts it to 1-2 minutes. If ghfast.top is ever down, swap it
+# for another (https://gh-proxy.com/ , https://ghproxy.net/) or, if you have fast
+# GitHub access, drop the prefix to hit GitHub directly:
+#   ENV NUCLEI_URL=https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${TARGETARCH}.zip
+ENV NUCLEI_URL=https://ghfast.top/https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${TARGETARCH}.zip
 RUN wget -O /tmp/nuclei.zip "${NUCLEI_URL}" && \
     unzip /tmp/nuclei.zip -d /tmp/nuclei && \
     mv /tmp/nuclei/nuclei /usr/local/bin/nuclei && \

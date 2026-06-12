@@ -133,16 +133,65 @@ uv run python main.py
 
 ### Bringing up the Docker range
 
-The Equifax-style range lives in `equifax/`. The SSH keypair used for the
-webserver → database lateral move is a throwaway lab key and is **not committed** —
-generate it once after cloning, then build and start the range:
+The Equifax-style range lives in `equifax/`. It builds natively on both Intel
+(amd64) and Apple Silicon (arm64) — no `--platform` pin, no emulation. Run the
+steps below in order from the **repo root**.
+
+**Step 0 — generate the lab SSH keypair (REQUIRED on a fresh clone).** The
+webserver→database lateral-move keypair is a throwaway lab key and is
+**gitignored**, so a fresh clone does not contain it. Skip this and the build
+fails at the `COPY id_rsa` step.
 
 ```bash
-sh equifax/gen-keys.sh                         # generate the lab SSH keypair locally
-cd equifax && docker compose build && docker compose up -d
+sh equifax/gen-keys.sh        # writes webserver/ssh/id_rsa + database/authorized_keys
 ```
 
-Tear it down with `docker compose down` from inside `equifax/`.
+**Step 1 — build and start.**
+
+```bash
+cd equifax
+docker compose down           # clear leftover containers/networks (safe even if none)
+docker compose build          # add --no-cache only to discard a previously failed build's cache
+docker compose up -d
+docker compose ps             # both database and webserver should be "Up"
+```
+
+> **First build takes a while.** The webserver downloads the nuclei binary
+> (~30 MB). The Dockerfile defaults to the `ghfast.top` GitHub mirror (≈1–2 min);
+> a slow link still means several minutes. A slow-moving progress bar is
+> **downloading, not frozen — do not Ctrl+C.** If the mirror is down, see the
+> `NUCLEI_URL` line in `webserver/Dockerfile` to switch mirrors or go direct to
+> GitHub.
+
+**Step 2 — walk the attack chain.**
+
+```bash
+# Enter the public-facing webserver (lands as the 'tomcat' user)
+docker compose exec webserver bash
+
+# Inside webserver: find the planted private key + SSH config
+cat ~/.ssh/config
+ls -l ~/.ssh/
+
+# Lateral move to the database host (key-based, no password)
+ssh database
+#   -> "Warning: Permanently added '192.168.201.100' ..." is NORMAL, not an error
+#   -> if it says "Connection refused", sshd may not be ready yet — wait a few seconds and retry
+
+# Inside database: confirm identity and exfiltrate the sensitive data
+whoami                                    # -> database
+cat /home/database/data.json | head -20   # -> credit-card numbers, SSNs, salaries
+
+exit    # database  -> back to webserver (tomcat)
+exit    # webserver -> back to your host shell
+```
+
+**Step 3 — tear down.**
+
+```bash
+docker compose down           # stop + remove containers/networks
+docker compose ps             # confirm empty
+```
 
 ---
 
