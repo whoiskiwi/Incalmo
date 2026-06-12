@@ -14,10 +14,9 @@
                                             # 192.168.201.100; if the IP doesn't match, lateral movement fails
     webserver:                       # second container, named webserver (the public-facing site, the entry point)
       build: ./webserver             # look in ./webserver for a Dockerfile and build it
-      platform: linux/amd64          # force amd64 architecture.
-                                      # Why: this Dockerfile downloads the amd64 build of Go,
-                                      # but your Mac is an arm chip; this line makes Docker emulate amd64,
-                                      # otherwise the build fails due to architecture mismatch
+                                      # No platform pin: the Dockerfile now picks the Go build matching
+                                      # the host chip (TARGETARCH), so this builds natively on both
+                                      # Intel (amd64) and Apple Silicon (arm64) -- no emulation, no SIGILL
       networks:                      # which network this joins
         - labnet                     # also joins labnet. This one needs no fixed IP, Docker assigns automatically,
                                       # so the simple dash-list form is enough (different from database above)

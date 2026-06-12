@@ -15,19 +15,22 @@ RUN apt-get update && \
 
 RUN apt-get install -y sshpass nmap ncat python3 python3-pip net-tools curl wget unzip
 
-# Install Go from a China mirror (version >= nuclei requirement to avoid toolchain switch)
-RUN wget https://mirrors.aliyun.com/golang/go1.25.11.linux-amd64.tar.gz && \
-    rm -rf /usr/local/go && \
-    tar -C /usr/local -xzf go1.25.11.linux-amd64.tar.gz && \
-    rm go1.25.11.linux-amd64.tar.gz
-
-ENV GOPATH /opt/go
-ENV PATH /usr/local/go/bin:$GOPATH/bin:$PATH
-ENV GOPROXY=https://goproxy.cn,direct
-ENV GOSUMDB=off
-
-RUN go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && \
-    cp $GOPATH/bin/nuclei /usr/local/bin/nuclei
+# Install nuclei from its prebuilt release binary (arch-aware) instead of compiling
+# from source. The old `go install` approach pulled 1000+ Go modules and could take
+# HOURS over a slow link; this is a single ~30MB download that finishes in seconds.
+# No Go toolchain is needed anymore -- nuclei was the only thing that used it.
+# TARGETARCH is auto-injected by BuildKit (amd64 on Intel, arm64 on Apple Silicon)
+# and matches nuclei's asset naming, so this works natively on either chip.
+ARG TARGETARCH
+ENV NUCLEI_VERSION=3.9.0
+# If GitHub is slow from your network, prepend a mirror, e.g.
+#   ENV NUCLEI_URL=https://ghfast.top/https://github.com/projectdiscovery/...
+ENV NUCLEI_URL=https://github.com/projectdiscovery/nuclei/releases/download/v${NUCLEI_VERSION}/nuclei_${NUCLEI_VERSION}_linux_${TARGETARCH}.zip
+RUN wget -O /tmp/nuclei.zip "${NUCLEI_URL}" && \
+    unzip /tmp/nuclei.zip -d /tmp/nuclei && \
+    mv /tmp/nuclei/nuclei /usr/local/bin/nuclei && \
+    chmod +x /usr/local/bin/nuclei && \
+    rm -rf /tmp/nuclei /tmp/nuclei.zip
 
 # Set default shell to be bash
 RUN chsh -s /bin/bash $TOMCAT_USER
