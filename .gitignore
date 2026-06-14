@@ -41,3 +41,7 @@ CODE_GUIDE.md
 reports/
 # Official files kept for local reference only
 reference/
+# Personal Chinese attack plan (not committed)
+ATTACK_PLAN_zh.md
+# Per-run attack output (stolen data; never committed)
+equifax/webserver/attack/output/
