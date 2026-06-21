@@ -45,7 +45,7 @@ class FindInfoAgent(BaseAgent):
         )
 
     def _field(self, config_text: str, name: str) -> str:
-        """Pull a value out of an ssh_config line like '    HostName 192.168.201.100'."""
+        """Pull a value out of an ssh_config line like '    HostName 192.168.1.100'."""
         for line in config_text.splitlines():
             parts = line.split()
             if len(parts) >= 2 and parts[0].lower() == name.lower():

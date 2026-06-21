@@ -1,5 +1,5 @@
 Host database
     IdentityFile /opt/tomcat/.ssh/id_rsa
-    HostName 192.168.201.100
+    HostName 192.168.1.100
     User database
     StrictHostKeyChecking no

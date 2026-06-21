@@ -1,3 +1,4 @@
 from .environment_state_service import EnvironmentStateService
 from .cnc_service import CncService
 from .exfil_receiver import ExfilReceiver
+from .attack_graph_service import AttackGraphService

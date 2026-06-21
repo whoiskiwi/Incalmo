@@ -41,10 +41,10 @@ class WebShell(CommandRunner):
 
     def __init__(
         self,
-        rhost: str = "192.168.201.2",        # webserver address INSIDE the lab network
+        rhost: str = "10.0.0.2",
         rport: int = 8080,
         target_uri: str = "/fileupload/upload.action",
-        docker_network: str = "equifax_labnet",
+        docker_network: str = "equifax-seg_extnet",
         msf_image: str = "metasploitframework/metasploit-framework",
         session_wait: int = 10,              # seconds to wait for the shell to call back
     ):
@@ -114,8 +114,8 @@ class SshRunner(CommandRunner):
         host: str,
         user: str,
         private_key: str,
-        docker_network: str = "equifax_labnet",
-        image: str = "equifax-webserver",     # local image that ships an ssh client
+        docker_network: str = "equifax-seg_intnet",
+        image: str = "equifax-seg-webserver",
     ):
         self.host = host
         self.user = user

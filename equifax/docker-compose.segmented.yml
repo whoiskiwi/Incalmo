@@ -1,0 +1,75 @@
+# ============================================================
+# SEGMENTED Equifax range -- paper-faithful topology (PLAN 附录 C, step C.5.1).
+# ------------------------------------------------------------
+# Keeps the original docker-compose.yml (flat labnet) intact as the baseline.
+# Bring this one up with an explicit -f and -p so it does NOT collide with the
+# flat range:
+#     docker compose -f docker-compose.segmented.yml -p equifax-seg up -d --build
+#
+# Topology (PLAN C.2):
+#     extnet 10.0.0.0/24                  intnet 192.168.1.0/24 (internal, no egress)
+#       [attacker 10.0.0.50] -> [ webserver ] -> [ database 192.168.1.100 ]
+#                               10.0.0.2 / 192.168.1.2   ^ db cannot route back to attacker
+# ============================================================
+
+services:
+  database:
+    build: ./database
+    networks:
+      intnet:
+        ipv4_address: 192.168.1.100      # ONLY on the internal net
+    # db's Dockerfile installs curl/wget -> it can PUSH loot to the webserver
+    # during multi-hop exfil (C.5.4). It can NOT reach extnet, the attacker, or
+    # the Mac -- that isolation is the whole point.
+
+  webserver:
+    build: ./webserver
+    networks:                            # DUAL-HOMED = the only bridge ext <-> int
+      extnet:
+        ipv4_address: 10.0.0.2
+      intnet:
+        ipv4_address: 192.168.1.2
+    ports:
+      - "8080:8080"                      # still exposed to the Mac for manual checks
+    depends_on:
+      - database
+    # ⚠️ TODO(you): the webserver image BAKES ~/.ssh/config with
+    #    HostName 192.168.201.100  (see webserver/ssh/config) -- that is the FLAT-net
+    #    db address. In this range the db is 192.168.1.100, so FindInfo would learn
+    #    the wrong host. Fix ONE of:
+    #      (a) edit webserver/ssh/config -> HostName 192.168.1.100, then rebuild
+    #          (simplest, but changes the flat baseline image too -- rebuild both ranges), or
+    #      (b) make the HostName a Docker build ARG (per-range value), or
+    #      (c) bind-mount a segmented ssh/config over /opt/tomcat/.ssh/config here
+    #          (watch file ownership -> tomcat, mode 600).
+
+  attacker:                              # NEW: the real attacker box (no longer the Mac)
+    build:
+      context: ./attacker
+    networks:
+      extnet:
+        ipv4_address: 10.0.0.50
+    volumes:
+      - ../incalmo:/incalmo/incalmo:ro   # live code: edit on Mac, visible in here
+      - ../output:/incalmo/output        # loot lands here (shared back to the Mac)
+      - ../.env:/incalmo/.env:ro         # CALDERA_API_KEY etc.
+    # Caldera runs on the Mac (localhost:8888). extnet is a normal bridge, so the
+    # attacker reaches it via host.docker.internal:8888.
+    # TODO(you): point CncService base_url at http://host.docker.internal:8888
+    # (the default is localhost:8888, which inside this container is the container itself).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["sleep", "infinity"]
+
+networks:
+  extnet:                                # external: attacker <-> webserver
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
+  intnet:                                # internal: webserver <-> database ONLY
+    driver: bridge
+    internal: true                       # ★ KEY: no route to host / no external egress
+    ipam:
+      config:
+        - subnet: 192.168.1.0/24
