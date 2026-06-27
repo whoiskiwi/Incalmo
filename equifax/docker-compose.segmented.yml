@@ -1,5 +1,5 @@
 # ============================================================
-# SEGMENTED Equifax range -- paper-faithful topology (PLAN 附录 C, step C.5.1).
+# SEGMENTED Equifax range -- paper-faithful topology (PLAN Appendix C, step C.5.1).
 # ------------------------------------------------------------
 # Keeps the original docker-compose.yml (flat labnet) intact as the baseline.
 # Bring this one up with an explicit -f and -p so it does NOT collide with the

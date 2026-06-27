@@ -27,8 +27,9 @@ import uuid
 
 
 class CncService:
-    def __init__(self, base_url: str = "http://localhost:8888", api_token: str = None):
-        self.base = base_url.rstrip("/") + "/api/v2"
+    def __init__(self, base_url: str = None, api_token: str = None):
+        resolved = base_url or os.environ.get("CALDERA_URL", "http://localhost:8888")
+        self.base = resolved.rstrip("/") + "/api/v2"
         # Caldera prints the red API token in its startup logs; pass it here or
         # via the CALDERA_API_KEY env var. It changes when the container is recreated.
         self.token = api_token or os.environ.get("CALDERA_API_KEY")

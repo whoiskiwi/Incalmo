@@ -1,5 +1,5 @@
 # ============================================================
-# Attacker workstation for the SEGMENTED Equifax range (PLAN 附录 C).
+# Attacker workstation for the SEGMENTED Equifax range (PLAN Appendix C).
 # ------------------------------------------------------------
 # Why this exists: once `intnet` is `internal: true`, the database can no longer
 # reach the Mac host, so the Mac can no longer be the attacker. The attacker must
