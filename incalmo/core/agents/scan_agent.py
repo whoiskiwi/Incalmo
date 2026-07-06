@@ -1,3 +1,4 @@
+import ipaddress
 import subprocess
 from incalmo.core.services import EnvironmentStateService
 from incalmo.core.models import Host
@@ -55,6 +56,9 @@ class ScanAgent(BaseAgent):
         for host in discovered_hosts:
             host.is_external = is_external
             self.env_service.add_host(host)
+            cidr = self._infer_cidr(host.ip, target)
+            if cidr:
+                self.env_service.add_host_to_subnet(host.ip, cidr)
             print(f"[ScanAgent] Discovered host: {host.ip}, "
                 f"open ports: {host.get_open_ports()}, "
                 f"vulnerabilities: {[v.cve_id for v in host.vulnerabilities]}")
@@ -114,3 +118,31 @@ class ScanAgent(BaseAgent):
         except FileNotFoundError:
             print("[ScanAgent] nmap not found, please install it first: brew install nmap")
             return None
+
+    def _infer_cidr(self, host_ip: str, scan_target: str) -> str | None:
+        """
+        Find the CIDR this host belongs to.
+        1. If scan_target is already a CIDR, use it (if host is inside it).
+        2. Otherwise search the known subnets in the environment state service.
+        """
+        try:
+            addr = ipaddress.ip_address(host_ip)
+        except ValueError:
+            return None
+
+        if "/" in scan_target:
+            try:
+                net = ipaddress.ip_network(scan_target, strict=False)
+                if addr in net:
+                    return scan_target
+            except ValueError:
+                pass
+
+        for subnet in self.env_service.get_subnets():
+            try:
+                if addr in ipaddress.ip_network(subnet.cidr, strict=False):
+                    return subnet.cidr
+            except ValueError:
+                continue
+
+        return None

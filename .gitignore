@@ -46,3 +46,4 @@ ATTACK_PLAN_zh.md
 PAPER_Incalmo.md
 # Per-run attack output (stolen data; never committed)
 equifax/webserver/attack/output/
+architecture.svg
