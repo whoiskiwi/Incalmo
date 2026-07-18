@@ -53,6 +53,7 @@ services:
       - ../incalmo:/incalmo/incalmo:ro   # live code: edit on Mac, visible in here
       - ../output:/incalmo/output        # loot lands here (shared back to the Mac)
       - ../.env:/incalmo/.env:ro         # CALDERA_API_KEY etc.
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker-in-Docker for WebShell/SshRunner
     # Caldera runs on the Mac (localhost:8888). extnet is a normal bridge, so the
     # attacker reaches it via host.docker.internal:8888.
     # TODO(you): point CncService base_url at http://host.docker.internal:8888

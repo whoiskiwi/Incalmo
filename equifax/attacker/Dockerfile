@@ -18,12 +18,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         nmap openssh-client curl ca-certificates iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
+RUN ARCH=$(uname -m) && \
+    curl -fsSL "https://download.docker.com/linux/static/stable/${ARCH}/docker-27.5.1.tgz" \
+    | tar xz --strip-components=1 -C /usr/local/bin/ docker/docker
+
 # Third-party Python deps. The incalmo/ package itself is bind-mounted at runtime
 # (not installed), so we only install its dependencies here.
 # Only what the deterministic baseline needs for now; langchain is added in
 # stage 4 (LLM planner). Keep in sync with pyproject.toml [dependencies].
-RUN pip install --no-cache-dir "pydantic>=2.7" "python-dotenv>=1.0"
-# TODO(stage 4): RUN pip install --no-cache-dir "langchain>=0.3" "langchain-anthropic>=0.3"
+RUN pip install --no-cache-dir \
+    "pydantic==2.13.4" "pydantic-core==2.46.4" \
+    "python-dotenv==1.2.2" "httpx[socks]==0.28.1" \
+    "langchain==1.3.4" "langchain-core==1.4.9" \
+    "langchain-openai==1.3.5" "openai==2.46.0"
 
 # Code lives here via a bind mount (see docker-compose.segmented.yml). Running
 # `python -m incalmo.core.strategy.equifax_baseline` from this dir finds the

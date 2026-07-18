@@ -39,6 +39,19 @@ class FindInfoAgent(BaseAgent):
         )
         self.env_service.add_credential(cred)
 
+        # 4. Register the target host AND the pivot in the target's subnet so
+        #    the attack graph can route attacker → pivot → target.
+        if target_host:
+            import ipaddress
+            for subnet in self.env_service.get_subnets():
+                try:
+                    if ipaddress.ip_address(target_host) in ipaddress.ip_network(subnet.cidr, strict=False):
+                        self.env_service.add_host_to_subnet(target_host, subnet.cidr)
+                        self.env_service.add_host_to_subnet(found_on_host, subnet.cidr)
+                        break
+                except ValueError:
+                    pass
+
         return self._success(
             f"Found SSH key for {target_user}@{target_host} on {found_on_host}",
             {"username": target_user, "can_access": target_host, "found_at": key_path},

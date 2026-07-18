@@ -1,49 +1,38 @@
-from langchain_anthropic import ChatAnthropic
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
-# Cost per 1M tokens (USD) — update if Anthropic changes pricing
 _PRICE = {
-    "claude-sonnet-4-6":          {"input": 3.00,  "output": 15.00},
-    "claude-haiku-4-5-20251001":  {"input": 0.80,  "output":  4.00},
-    "claude-opus-4-8":            {"input": 15.00, "output": 75.00},
+    "gpt-4o":      {"input": 2.50, "output": 10.00},
+    "gpt-4o-mini": {"input": 0.15, "output":  0.60},
 }
-_DEFAULT_PRICE = {"input": 3.00, "output": 15.00}
+_DEFAULT_PRICE = {"input": 2.50, "output": 10.00}
+
+PORTKEY_BASE_URL = "https://api.portkey.ai/v1"
 
 
 class IncalmoLLMClient:
     """
-    Thin wrapper around LangChain's ChatAnthropic.
-    Converts our plain-dict message list to LangChain objects,
-    and tracks token usage + running cost across the whole session.
+    Thin wrapper around LangChain's ChatOpenAI routed through Portkey.
+    Model name should be prefixed with @openai/ (e.g. "@openai/gpt-4o").
     """
 
-    def __init__(self, model: str = "claude-sonnet-4-6", api_key: str = "",
+    def __init__(self, model: str = "@openai/gpt-4o", api_key: str = "",
                 max_tokens: int = 4096):
         self.model = model
-        self._llm = ChatAnthropic(
+        self._llm = ChatOpenAI(
             model=model,
-            api_key=api_key or None,
+            api_key=api_key or "dummy",
+            base_url=PORTKEY_BASE_URL,
             max_tokens=max_tokens,
         )
         self.total_input_tokens = 0
         self.total_output_tokens = 0
         self.total_cost_usd = 0.0
 
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
-
     def invoke(self, messages: list[dict]) -> str:
-        """
-        Send a conversation to Claude and return the assistant reply as a string.
-
-        messages: list of {"role": "system"|"user"|"assistant", "content": str}
-        """
         lc_messages = self._to_langchain(messages)
         response = self._llm.invoke(lc_messages)
-
         self._track_usage(response)
-
         return response.content
 
     def cost_summary(self) -> str:
@@ -52,10 +41,6 @@ class IncalmoLLMClient:
             f"out={self.total_output_tokens:,} "
             f"cost=${self.total_cost_usd:.4f}"
         )
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _to_langchain(self, messages: list[dict]):
         result = []
@@ -80,6 +65,6 @@ class IncalmoLLMClient:
         out = meta.get("output_tokens", 0)
         self.total_input_tokens += inp
         self.total_output_tokens += out
-
-        price = _PRICE.get(self.model, _DEFAULT_PRICE)
+        bare_model = self.model.lstrip("@openai/")
+        price = _PRICE.get(bare_model, _DEFAULT_PRICE)
         self.total_cost_usd += (inp * price["input"] + out * price["output"]) / 1_000_000

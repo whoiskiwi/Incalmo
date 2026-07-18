@@ -9,8 +9,9 @@ description = "Independent re-implementation of Incalmo (arXiv:2501.16466) — f
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "httpx[socks]>=0.28.1",
     "langchain>=0.3",            # planning layer: iterative prompt / conversation management (matches the original)
-    "langchain-anthropic>=0.3",  # call Claude (Sonnet/Haiku) via LangChain
+    "langchain-openai>=0.3",     # call GPT-4o via Portkey gateway
     "pydantic>=2.7",             # data models (Host/Subnet/Credential/Vulnerability)
     "python-dotenv>=1.0",        # read the API key from .env
     # Added later, by stage:

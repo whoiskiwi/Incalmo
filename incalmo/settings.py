@@ -12,9 +12,9 @@ _CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "config.json"
 
 @dataclass
 class Settings:
-    anthropic_api_key: str = ""
+    portkey_api_key: str = ""
     caldera_api_key: str = ""
-    model: str = "claude-sonnet-4-6"
+    model: str = "@openai/gpt-4o"
     attacker_ip: str = "10.0.0.50"
     extnet: str = "10.0.0.0/24"
     intnet: str = "192.168.1.0/24"
@@ -26,7 +26,7 @@ class Settings:
 
 def load_settings() -> Settings:
     s = Settings()
-    s.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    s.portkey_api_key = os.environ.get("PORTKEY_API_KEY", "")
     s.caldera_api_key = os.environ.get("CALDERA_API_KEY", "")
 
     if _CONFIG_PATH.exists():

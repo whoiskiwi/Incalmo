@@ -122,8 +122,8 @@ def _format_results(results: list[dict]) -> str:
 def run_orchestrator():
     settings = load_settings()
 
-    if not settings.anthropic_api_key:
-        print("[ERROR] ANTHROPIC_API_KEY not set. Add it to .env and retry.")
+    if not settings.portkey_api_key:
+        print("[ERROR] PORTKEY_API_KEY not set. Add it to .env and retry.")
         return
 
     # ── Services ──────────────────────────────────────────────────────────
@@ -155,7 +155,7 @@ def run_orchestrator():
     # ── LLM client ────────────────────────────────────────────────────────
     llm = IncalmoLLMClient(
         model=settings.model,
-        api_key=settings.anthropic_api_key,
+        api_key=settings.portkey_api_key,
         max_tokens=settings.max_tokens,
     )
 

