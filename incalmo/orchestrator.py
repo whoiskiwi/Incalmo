@@ -137,7 +137,7 @@ def run_orchestrator():
 
     # ── Agents ────────────────────────────────────────────────────────────
     scan_agent    = ScanAgent(env)
-    lateral_agent = LateralMoveAgent(env, cnc)
+    lateral_agent = LateralMoveAgent(env, cnc, docker_extnet=settings.extnet_docker)
     findinfo_agent = FindInfoAgent(env)
     exfil_agent   = ExfiltrateAgent(env)
 
@@ -166,6 +166,8 @@ def run_orchestrator():
             extnet=settings.extnet,
             intnet=settings.intnet,
             attacker_ip=settings.attacker_ip,
+            data_path=settings.data_path,
+            goal=settings.goal,
         )},
     ]
 

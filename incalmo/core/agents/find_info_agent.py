@@ -43,14 +43,28 @@ class FindInfoAgent(BaseAgent):
         #    the attack graph can route attacker → pivot → target.
         if target_host:
             import ipaddress
+            matched = False
             for subnet in self.env_service.get_subnets():
                 try:
                     if ipaddress.ip_address(target_host) in ipaddress.ip_network(subnet.cidr, strict=False):
                         self.env_service.add_host_to_subnet(target_host, subnet.cidr)
                         self.env_service.add_host_to_subnet(found_on_host, subnet.cidr)
+                        matched = True
                         break
                 except ValueError:
                     pass
+
+            if not matched:
+                # Target is on a subnet not yet seeded — infer a /24 and create it
+                inferred_cidr = str(ipaddress.ip_network(f"{target_host}/24", strict=False))
+                self.env_service.add_initial_subnet(inferred_cidr, is_external=False)
+                self.env_service.add_host_to_subnet(target_host, inferred_cidr)
+                self.env_service.add_host_to_subnet(found_on_host, inferred_cidr)
+
+            # Add a stub host entry so the target can be marked compromised later
+            if self.env_service.get_host(target_host) is None:
+                from incalmo.core.models import Host
+                self.env_service.add_host(Host(ip=target_host))
 
         return self._success(
             f"Found SSH key for {target_user}@{target_host} on {found_on_host}",

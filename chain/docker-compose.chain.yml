@@ -1,0 +1,104 @@
+# 4-Layer Chain environment
+#
+# Topology:
+#   attacker (10.20.0.50)
+#     → net0: 10.20.0.0/24
+#       → host1 (10.20.0.2 / 10.21.0.1)   Struts exploit entry point
+#         → net1: 10.21.0.0/24
+#           → host2 (10.21.0.2 / 10.22.0.1)   SSH pivot
+#             → net2: 10.22.0.0/24
+#               → host3 (10.22.0.2 / 10.23.0.1)   SSH pivot
+#                 → net3: 10.23.0.0/24  [internal]
+#                   → host4 (10.23.0.2)   crown jewel data
+
+services:
+
+  attacker:
+    build:
+      context: ../equifax/attacker
+    environment:
+      - INCALMO_CONFIG=/incalmo/config/config-chain.json
+    networks:
+      net0:
+        ipv4_address: 10.20.0.50
+    ports:
+      - "9000:9000"
+    volumes:
+      - ../incalmo:/incalmo/incalmo:ro
+      - ../main.py:/incalmo/main.py:ro
+      - ../config:/incalmo/config:ro
+      - ../output:/incalmo/output
+      - ../.env:/incalmo/.env:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["sleep", "infinity"]
+
+  host1:
+    build:
+      context: ./host1
+    networks:
+      net0:
+        ipv4_address: 10.20.0.2
+      net1:
+        ipv4_address: 10.21.0.1
+    depends_on:
+      - host2
+
+  host2:
+    build:
+      context: ./host2
+    networks:
+      net1:
+        ipv4_address: 10.21.0.2
+      net2:
+        ipv4_address: 10.22.0.1
+    depends_on:
+      - host3
+
+  host3:
+    build:
+      context: ./host3
+    networks:
+      net2:
+        ipv4_address: 10.22.0.2
+      net3:
+        ipv4_address: 10.23.0.1
+    depends_on:
+      - host4
+
+  host4:
+    build:
+      context: ./host4
+    networks:
+      net3:
+        ipv4_address: 10.23.0.2
+
+networks:
+  net0:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.20.0.0/24
+
+  net1:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.21.0.0/24
+          gateway: 10.21.0.254
+
+  net2:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.22.0.0/24
+          gateway: 10.22.0.254
+
+  net3:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.23.0.0/24
+          gateway: 10.23.0.254

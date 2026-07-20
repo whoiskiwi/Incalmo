@@ -53,6 +53,7 @@ class ExfilReceiver:
             def log_message(self, format, *args):
                 pass
 
+        HTTPServer.allow_reuse_address = True
         self.server = HTTPServer(("0.0.0.0", self.port), Handler)
         thread = threading.Thread(
             target=self.server.serve_forever,
@@ -73,3 +74,4 @@ class ExfilReceiver:
         """Shut down the HTTP server."""
         if self.server:
             self.server.shutdown()
+            self.server.server_close()

@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "config.json"
+_DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "config" / "config.json"
+_CONFIG_PATH = Path(os.environ.get("INCALMO_CONFIG", str(_DEFAULT_CONFIG)))
 
 
 @dataclass
@@ -19,6 +20,9 @@ class Settings:
     extnet: str = "10.0.0.0/24"
     intnet: str = "192.168.1.0/24"
     web_intnet_ip: str = "192.168.1.2"  # webserver intnet-facing IP, used in exfil relay URL
+    extnet_docker: str = "equifax-seg_extnet"  # Docker network name for the external subnet
+    data_path: str = "/home/database/data.json"
+    goal: str = ""
     timeout_minutes: int = 75
     max_rounds: int = 40
     max_tokens: int = 4096
@@ -39,5 +43,16 @@ def load_settings() -> Settings:
         timeout_sec = planner.get("timeout_seconds")
         if timeout_sec:
             s.timeout_minutes = timeout_sec // 60
+
+        network = cfg.get("network", {})
+        s.extnet = network.get("extnet", s.extnet)
+        s.intnet = network.get("intnet", s.intnet)
+        s.attacker_ip = network.get("attacker_ip", s.attacker_ip)
+        s.web_intnet_ip = network.get("web_intnet_ip", s.web_intnet_ip)
+        s.extnet_docker = network.get("extnet_docker", s.extnet_docker)
+
+        target = cfg.get("target", {})
+        s.data_path = target.get("data_path", s.data_path)
+        s.goal = cfg.get("goal", s.goal)
 
     return s
