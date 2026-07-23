@@ -33,7 +33,7 @@ services:
     build:
       context: ../equifax/attacker
     environment:
-      - INCALMO_CONFIG=/incalmo/config/config-chain.json
+      - INCALMO_CONFIG=/incalmo/config/config-chain4.json
       - CALDERA_URL=http://10.20.0.10:8888
     networks:
       net0:

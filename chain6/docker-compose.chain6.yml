@@ -60,7 +60,7 @@ services:
 
   host1:
     build:
-      context: ../chain/host1
+      context: ../chain4/host1
     networks:
       net0:
         ipv4_address: 10.20.0.2
@@ -71,7 +71,7 @@ services:
 
   host2:
     build:
-      context: ../chain/host2
+      context: ../chain4/host2
     networks:
       net1:
         ipv4_address: 10.21.0.2
@@ -82,7 +82,7 @@ services:
 
   host3:
     build:
-      context: ../chain/host3
+      context: ../chain4/host3
     networks:
       net2:
         ipv4_address: 10.22.0.2

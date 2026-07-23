@@ -56,10 +56,28 @@ class CncService:
             for a in self._api("GET", "/agents")
         ]
 
-    def agent_paw(self, group: str):
+    def agent_paw(self, group: str, max_stale_seconds: int = 180):
+        """Return the paw of a live agent in `group`, or None.
+
+        An agent is considered dead if it has not beaconed in the last
+        `max_stale_seconds` seconds (default 3 min).  Stale agents are
+        ignored so lateral_move re-deploys rather than trying to issue
+        commands to a dead implant.
+        """
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
         for a in self._api("GET", "/agents"):
-            if a["group"] == group:
-                return a["paw"]
+            if a["group"] != group:
+                continue
+            last_seen = a.get("last_seen", "")
+            if last_seen:
+                try:
+                    ls = datetime.fromisoformat(last_seen.replace("Z", "+00:00"))
+                    if (now - ls).total_seconds() > max_stale_seconds:
+                        continue  # dead agent — ignore
+                except ValueError:
+                    pass
+            return a["paw"]
         return None
 
     def execute_command(self, paw: str, command: str, timeout: int = 300) -> str:

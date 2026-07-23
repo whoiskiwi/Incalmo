@@ -281,50 +281,12 @@ def _dispatch_one(task: dict) -> dict:
                 # Discover this hop's inner IP on the shared subnet
                 inner_ip = get_inner_ip(hop_runner, sn_cidr) if sn_cidr else None
 
-                # Set up the relay.
-                # Use Python TCP relay when python3 is available — more reliable for
-                # large files than ncat --sh-exec pipes.  Fall back to ncat otherwise.
-                py3_check = hop_runner.run("which python3 2>/dev/null || echo nopy3")
-                has_python3 = py3_check and "python3" in py3_check and "nopy3" not in py3_check
-                if has_python3:
-                    nh, np = next_addr
-                    rp = _relay_port
-                    py_relay = (
-                        f"import socket,threading\n"
-                        f"def p(a,b):\n"
-                        f" try:\n"
-                        f"  [b.sendall(d) for d in iter(lambda:a.recv(65536),b'') if d]\n"
-                        f" except:pass\n"
-                        f" [s.shutdown(socket.SHUT_WR) for s in (b,) if True]\n"
-                        f"s=socket.socket();s.setsockopt(socket.SOL_SOCKET,socket.SO_REUSEADDR,1)\n"
-                        f"s.bind(('',{rp}));s.listen(5)\n"
-                        f"while True:\n"
-                        f" c,_=s.accept();f=socket.socket()\n"
-                        f" try:\n"
-                        f"  f.connect(('{nh}',{np}))\n"
-                        f"  [threading.Thread(target=p,args=a,daemon=True).start() for a in [(c,f),(f,c)]]\n"
-                        f" except:c.close();f.close()\n"
-                    )
-                    relay_cmd = (
-                        f"nohup /usr/bin/python3 -c \"{py_relay}\" "
-                        f">/dev/null 2>&1 & sleep 1 && echo relay-ok"
-                    )
-                    result = hop_runner.run(relay_cmd)
-                    # Fall back to ncat if python3 not available
-                    if "relay-ok" not in (result or ""):
-                        relay_cmd = (
-                            f"nohup ncat -l -k -p {_relay_port} "
-                            f"--sh-exec 'ncat {next_addr[0]} {next_addr[1]}' "
-                            f">/dev/null 2>&1 & sleep 1 && echo relay-ok"
-                        )
-                        hop_runner.run(relay_cmd)
-                else:
-                    relay_cmd = (
-                        f"nohup ncat -l -k -p {_relay_port} "
-                        f"--sh-exec 'ncat {next_addr[0]} {next_addr[1]}' "
-                        f">/dev/null 2>&1 & sleep 1 && echo relay-ok"
-                    )
-                    hop_runner.run(relay_cmd)
+                # Use ncat relay (reliable, no multiline-in-JSON issues).
+                hop_runner.run(
+                    f"nohup ncat -l -k -p {_relay_port} "
+                    f"--sh-exec 'ncat {next_addr[0]} {next_addr[1]}' "
+                    f">/dev/null 2>&1 & sleep 1 && echo relay-ok"
+                )
 
                 # This hop's relay is now reachable at inner_ip:_relay_port
                 # (from the previous hop's perspective)

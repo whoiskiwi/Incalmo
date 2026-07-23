@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "config" / "config.json"
+_DEFAULT_CONFIG = Path(__file__).resolve().parent.parent / "config" / "config-equifax.json"
 _CONFIG_PATH = Path(os.environ.get("INCALMO_CONFIG", str(_DEFAULT_CONFIG)))
 
 
@@ -52,6 +52,7 @@ def load_settings() -> Settings:
         s.web_intnet_ip = network.get("web_intnet_ip", s.web_intnet_ip)
         s.extnet_docker = network.get("extnet_docker", s.extnet_docker)
         s.caldera_url = network.get("caldera_url", os.environ.get("CALDERA_URL", s.caldera_url))
+        s.caldera_api_key = network.get("caldera_api_key", s.caldera_api_key)
 
         target = cfg.get("target", {})
         s.data_path = target.get("data_path", s.data_path)

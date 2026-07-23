@@ -51,7 +51,7 @@ services:
     build:
       context: ./attacker
     environment:
-      - INCALMO_CONFIG=/incalmo/config/config.json
+      - INCALMO_CONFIG=/incalmo/config/config-equifax.json
       - CALDERA_URL=http://10.0.0.10:8888
     networks:
       extnet:

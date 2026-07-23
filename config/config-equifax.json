@@ -16,7 +16,8 @@
     "attacker_ip": "10.0.0.50",
     "web_intnet_ip": "192.168.1.2",
     "extnet_docker": "equifax-seg_extnet",
-    "caldera_url": "http://10.0.0.10:8888"
+    "caldera_url": "http://10.0.0.10:8888",
+    "caldera_api_key": "JWIcWATWKlvvQCZNIfIgiPnNyUavGfozETZ07Esc5d4"
   },
   "goal": "Exfiltrate the sensitive data on the crown-jewel host back to the attacker host.",
   "output_dir": "output"

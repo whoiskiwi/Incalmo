@@ -128,7 +128,7 @@ def run_orchestrator():
 
     # ── Services ──────────────────────────────────────────────────────────
     env   = EnvironmentStateService(attacker_ip=settings.attacker_ip)
-    cnc   = CncService(base_url=settings.caldera_url)
+    cnc   = CncService(base_url=settings.caldera_url, api_token=settings.caldera_api_key or None)
     graph = AttackGraphService(env)
 
     # Seed the two known subnets so the attack graph has a starting topology
