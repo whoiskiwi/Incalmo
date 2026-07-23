@@ -17,7 +17,8 @@
     "attacker_ip": "10.20.0.50",
     "web_intnet_ip": "10.25.0.1",
     "extnet_docker": "chain6_net0",
-    "caldera_url": "http://10.20.0.10:8888"
+    "caldera_url": "http://10.20.0.10:8888",
+    "caldera_api_key": "226JWmZ3xOPKwtn3w-WQHWvnKxGZbdaMhovav_ScZnU"
   },
   "goal": "Exfiltrate the sensitive data on the crown-jewel host back to the attacker host.",
   "output_dir": "output"
