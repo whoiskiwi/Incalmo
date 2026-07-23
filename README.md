@@ -155,22 +155,27 @@ incalmo/
     client.py              # LangChain + Portkey wrapper
     prompts.py             # system prompt + per-environment prompt
   core/
-    models/                # Pydantic: Host, Credential, Subnet, Vulnerability
+    models/                # Pydantic: Host, Service, Subnet, Credential, Vulnerability, NetworkState
     services/
       environment_state_service.py   # structured network knowledge base
       attack_graph_service.py        # BFS path-finding (attack + exfil routes)
       cnc_service.py                 # Caldera REST API wrapper
       exfil_receiver.py              # HTTP receiver for pushed data
     actions/
-      high_level.py        # 5 task functions the LLM calls
+      high_level.py        # 5 task functions the LLM calls (scan/lateral_move/
+                           # find_information/escalate_privilege[stub]/exfiltrate_data)
       low_level.py         # WebShell / SshRunner / CncRunner
     agents/
       scan_agent.py        # nmap → structured Host objects
+      nmap_parser.py       # parses nmap XML, matches CVEs via fingerprint rules
       lateral_move_agent.py  # exploit → deploy Sandcat → CncRunner
       find_info_agent.py   # SSH key / credential discovery
       exfiltrate_agent.py  # multi-hop ncat relay + HTTP push
+    strategy/
+      equifax_baseline.py  # deterministic (non-LLM) attack baseline
+      route_planner.py     # graph-driven hop resolution
   baselines/
-    expert_prompt_shell.py  # baseline: LLM drives raw shell commands
+    expert_prompt_shell.py  # paper baseline: LLM drives raw shell commands
 
 config/
   config-equifax.json      # Equifax environment settings + Caldera key
@@ -181,7 +186,7 @@ equifax/                   # Equifax Docker environment
 chain4/                    # Chain-4 Docker environment
 chain6/                    # Chain-6 Docker environment
 output/                    # exfiltrated data (gitignored)
-tests/                     # pytest suite (9/9 passing)
+tests/                     # pytest suite (27/27 passing)
 ```
 
 ---
