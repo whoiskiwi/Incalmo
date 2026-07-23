@@ -1,4 +1,4 @@
-# Incalmo — from-paper re-implementation
+# Incalmo — From-Paper Reimplementation
 
 An **independent, from-scratch reimplementation** of the paper
 **_Incalmo: An Autonomous LLM-assisted System for Red Teaming Multi-Host Networks_**
@@ -13,236 +13,194 @@ copied from, nor does it depend on, the authors' official release.
 
 ---
 
-## 1. Background — what problem is Incalmo solving?
+## 1. What Incalmo Does
 
-Large language models can *describe* a multi-host network attack, but when you ask one
-to actually carry it out shell-command by shell-command, it gets lost: it forgets state,
-issues malformed commands, and fails on long horizons. The paper's measured result is
-that a naive "LLM drives the shell directly" approach succeeds on very few of its
-test networks.
+Standard LLM-driven shell attacks fail on multi-hop networks because the model
+issues irrelevant commands, forgets state, and gets lost over long horizons.
 
 **Incalmo's core insight: the LLM should only *plan*, never *execute*.**
 
-The model works at the level of high-level *intents* — "scan this subnet",
-"move laterally to that host", "exfiltrate the database" — and a layer of
-**deterministic, non-LLM expert programs** translates each intent into the actual
-low-level commands. This abstraction is what lets the paper reach **37 / 40**
-networks compromised, versus a handful for the direct-shell baseline.
+The model outputs high-level intents — `scan`, `lateral_move`, `find_information`,
+`exfiltrate_data` — and a layer of deterministic expert agents translates each
+intent into actual low-level operations. This is what lets the paper reach
+**37/40** networks compromised vs. a handful for direct-shell baselines.
 
 ```
             "what to do"  (intent)                "how to do it"  (commands)
   ┌──────────────────────────────┐      ┌────────────────────────────────────┐
-  │  Planning layer  (1 × Claude) │ ───▶ │  Execution layer  (non-LLM agents) │
+  │  Planning layer  (LLM)        │ ───▶ │  Execution layer  (expert agents)  │
   └──────────────────────────────┘      └────────────────────────────────────┘
-        decides & emits                       deterministic expert programs
-   <task> / <query> / <finished>          Scan · LateralMove · FindInfo · Exfil
+        decides & emits                    Scan · LateralMove · FindInfo · Exfil
+   <action> / <query> / <finished>         + Caldera C2 + ncat exfil relay
 ```
 
 ---
 
-## 2. Architecture
+## 2. Environments
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│ Planning layer        1 × Claude (via LangChain + Portkey)        │
-│                       decides the next move, emits                │
-│                       <task> / <query> / <finished>               │
-└───────────────────────────────┬───────────────────────────────────┘
-                                 │  high-level task API
-┌───────────────────────────────▼───────────────────────────────────┐
-│ Execution layer       orchestrator → deterministic task agents      │
-│                       Scan · LateralMove · FindInformation ·        │
-│                       EscalatePrivilege · ExfiltrateData            │
-└───────────────────────────────┬───────────────────────────────────┘
-                                 │  read / update
-┌───────────────────────────────▼───────────────────────────────────┐
-│ Supporting services   EnvironmentState · AttackGraph · C2(Caldera)  │
-└───────────────────────────────┬───────────────────────────────────┘
-                                 │  acts on
-┌───────────────────────────────▼───────────────────────────────────┐
-│ Range                 isolated Docker network (paper topology)      │
-│                       extnet: attacker ↔ webserver                 │
-│                       intnet: webserver ↔ database (no egress)      │
-└─────────────────────────────────────────────────────────────────┘
-```
+Three isolated Docker environments are implemented. Each starts with Caldera
+empty — the LLM installs implants dynamically as it compromises each host.
 
-### Network topology (paper Equifax scenario)
-
-```
-extnet 10.0.0.0/24                    intnet 192.168.1.0/24 (internal, no egress)
-[attacker 10.0.0.50] ──► [webserver 10.0.0.2 / 192.168.1.2] ──► [database 192.168.1.100]
-  runs attack code          dual-homed, only bridge                 holds 10,000 SSN records
-                            CVE-2017-5638 (Struts RCE)              locked in internal net
-```
+| Environment | Topology | Hosts | Entry point |
+|---|---|---|---|
+| **Equifax** | segmented (extnet / intnet) | 2 | CVE-2017-5638 (Apache Struts RCE) |
+| **Chain-4** | 4-hop linear chain | 4 | CVE-2017-5638 → SSH credential chain |
+| **Chain-6** | 6-hop linear chain | 6 | CVE-2017-5638 → SSH credential chain |
 
 ---
 
-## 3. Implementation status
+## 3. Quick Start
 
-| Module | Path | Status |
-|---|---|---|
-| Data models | `core/models/` | ✅ Host / Service / Subnet / Credential / Vulnerability / NetworkState |
-| Environment-state service | `core/services/environment_state_service.py` | ✅ full CRUD + query API |
-| Attack-graph service | `core/services/attack_graph_service.py` | ✅ BFS/DFS, `get_possible_attack_paths` + `get_shortest_exfil_path` |
-| C2 service | `core/services/cnc_service.py` | ✅ Caldera REST wrapper: list_agents / execute_command / wait_for_agent |
-| Exfil receiver | `core/services/exfil_receiver.py` | ✅ HTTP push receiver (independent of C2 channel) |
-| Low-level actions | `core/actions/low_level.py` | ✅ WebShell / SshRunner / CncRunner (common `run()` interface) |
-| Base agent | `core/agents/base_agent.py` | ✅ |
-| Scan agent + nmap parser | `core/agents/scan_agent.py` | ✅ |
-| LateralMove agent | `core/agents/lateral_move_agent.py` | ✅ exploit → implant → CncRunner handoff |
-| FindInformation agent | `core/agents/find_info_agent.py` | ✅ SSH key + config discovery |
-| ExfiltrateData agent | `core/agents/exfiltrate_agent.py` | ✅ multi-hop HTTP push via ncat relay |
-| EscalatePrivilege agent | `core/agents/escalate_agent.py` | ⬜ not needed for Equifax; pending for Chain/Star environments |
-| Route planner | `core/strategy/route_planner.py` | ✅ graph-driven hop resolution |
-| Deterministic baseline | `core/strategy/equifax_baseline.py` | ✅ end-to-end verified (10,000 records, segmented network) |
-| LLM planning loop | `core/strategy/llm_strategy.py` | ⬜ Stage 4 — next step |
-| Equifax range (flat) | `equifax/docker-compose.yml` | ✅ flat labnet baseline |
-| Equifax range (segmented) | `equifax/docker-compose.segmented.yml` | ✅ paper-faithful topology |
-| Caldera relay deploy | `equifax/redeploy_relay.sh` | ✅ one-shot P2P relay + agent deploy |
+**Prerequisites**: Docker Desktop, Python 3.12+, [uv](https://github.com/astral-sh/uv)
 
-**Tests passing:** `tests/test_models.py`, `tests/test_environment_state_service.py`,
-`tests/test_scan_agent.py`, `tests/test_attack_graph_service.py` (9/9)
-
----
-
-## 4. Requirements
-
-- macOS (Apple Silicon M1/M2 recommended)
-- Docker Desktop
-- Python 3.12+ with [uv](https://github.com/astral-sh/uv)
-- Caldera C2 server running locally on port 8888
-- Anthropic API key (for the LLM planning layer, Stage 4+)
-
----
-
-## 5. Quick start — run the deterministic baseline
-
-The deterministic baseline reproduces the full Equifax attack chain without an LLM —
-exploit → lateral move → credential theft → multi-hop exfiltration.
-
-### Step 1 — start Caldera
+### Setup
 
 ```bash
-# First time only: pull the image
-docker pull mitre/caldera:latest
+# Clone and install dependencies
+git clone <repo>
+cd Incalmo
+uv sync
 
-docker run -d --name caldera -p 8888:8888 -p 8443:8443 mitre/caldera:latest --insecure
-sleep 25
-
-# Verify
-curl -s -H "KEY: ADMIN123" http://localhost:8888/api/v2/agents \
-  | python3 -c "import json,sys; a=json.load(sys.stdin); print(f'Caldera OK — {len(a)} agents')"
-```
-
-### Step 2 — create .env
-
-```bash
+# Create .env with your API key
 cat > .env << 'EOF'
-CALDERA_API_KEY=ADMIN123
-CALDERA_URL=http://host.docker.internal:8888
+PORTKEY_API_KEY=<your-portkey-key>
+CALDERA_API_KEY=<filled automatically after first run>
 EOF
 ```
 
-### Step 3 — generate SSH keypair (first clone only)
+### Run an environment (one command)
+
+Each environment is fully self-contained. Bring it up, run the attack, tear it down:
+
+**Equifax**
+```bash
+docker compose -f equifax/docker-compose.segmented.yml -p equifax-seg up -d
+docker compose -f equifax/docker-compose.segmented.yml -p equifax-seg exec attacker python -m incalmo.orchestrator
+docker compose -f equifax/docker-compose.segmented.yml -p equifax-seg down
+```
+
+**Chain-4**
+```bash
+docker compose -f chain4/docker-compose.chain4.yml -p chain up -d
+docker compose -f chain4/docker-compose.chain4.yml -p chain exec attacker python -m incalmo.orchestrator
+docker compose -f chain4/docker-compose.chain4.yml -p chain down
+```
+
+**Chain-6**
+```bash
+docker compose -f chain6/docker-compose.chain6.yml -p chain6 up -d
+docker compose -f chain6/docker-compose.chain6.yml -p chain6 exec attacker python -m incalmo.orchestrator
+docker compose -f chain6/docker-compose.chain6.yml -p chain6 down
+```
+
+> **Note:** Only one environment can run at a time (all use ports 8888 and 9000).
+
+### Caldera API key
+
+Each environment's Caldera generates a random API key on first start.
+Read it once and store it in the environment's config file:
 
 ```bash
-sh equifax/gen-keys.sh
+# Example for Equifax — read after first docker compose up
+docker logs equifax-seg-caldera-1 2>&1 | grep -A8 "admin credentials"
+# Copy the Red API_TOKEN (two lines, concatenate them)
+# Then add to config/config-equifax.json:
+#   "caldera_api_key": "<token>"
 ```
 
-### Step 4 — start the segmented range
+Once stored in the config file, subsequent runs read it automatically.
 
+---
+
+## 4. Evaluated Results
+
+### Incalmo (LLM Orchestrator — GPT-4o)
+
+| Environment | Rounds | Time | Cost | Success |
+|---|---|---|---|---|
+| Equifax | 6 | 9.4 min | $0.031 | ✅ 2/2 hosts |
+| Chain-4 | 10 | 22.9 min | $0.065 | ✅ 4/4 hosts |
+| Chain-6 | 14 | 31.6 min | $0.104 | ✅ 6/6 hosts |
+
+### ExpertPromptShell Baseline (GPT-4o, Equifax)
+
+The paper's primary baseline: LLM outputs raw shell commands with no
+high-level abstractions.
+
+| Rounds | Time | Cost | Success |
+|---|---|---|---|
+| 40 (limit) | 7.8 min | $0.449 | ❌ 0/2 hosts |
+
+The baseline never exploited CVE-2017-5638. It wasted 14 consecutive rounds
+downloading Caldera's JavaScript UI files after mistaking the C2 web interface
+for target data. This matches the paper's finding that baselines issue 47–90%
+irrelevant commands.
+
+Run the baseline:
 ```bash
-cd equifax
-docker compose -f docker-compose.segmented.yml -p equifax-seg up -d --build
-# First build: ~3 minutes. Subsequent: instant.
-sleep 15
-docker compose -f docker-compose.segmented.yml -p equifax-seg ps
-# Expect: attacker, webserver, database all "running"
-```
-
-### Step 5 — deploy Caldera implants
-
-```bash
-cd ..   # back to repo root
-chmod +x equifax/redeploy_relay.sh
-./equifax/redeploy_relay.sh
-# Expect two agents at the end:
-#   <paw>  10.0.0.2        tomcat    <timestamp>
-#   <paw>  192.168.1.100   database  <timestamp>
-```
-
-### Step 6 — run the attack
-
-```bash
-docker compose -f equifax/docker-compose.segmented.yml \
-  -p equifax-seg \
-  exec -w /incalmo attacker \
-  python -m incalmo.core.strategy.equifax_baseline
-```
-
-Takes 3–5 minutes. Expected output ends with:
-```
-[+] Exfiltration complete: Exfiltrated 3097051 bytes from /home/database/data.json
-[*] Compromised hosts list = ['10.0.0.2', '192.168.1.100']
-[*] Output artifacts successfully saved to: /incalmo/output/<timestamp>/data.json
-```
-
-### Step 7 — verify
-
-```bash
-ls -lh output/*/data.json        # ~3 MB
-wc -l  output/*/data.json        # ~10,000 lines
-head -3 output/*/data.json       # SSN / credit card records
-```
-
-### Teardown
-
-```bash
-cd equifax
-docker compose -f docker-compose.segmented.yml -p equifax-seg down
-docker stop caldera
+docker compose -f equifax/docker-compose.segmented.yml -p equifax-seg up -d
+docker compose -f equifax/docker-compose.segmented.yml -p equifax-seg exec attacker \
+    python -m incalmo.baselines.expert_prompt_shell
 ```
 
 ---
 
-## 6. Directory layout
+## 5. Architecture
 
 ```
 incalmo/
+  orchestrator.py          # LLM planning loop (<action>/<query>/<finished>)
+  settings.py              # loads config/*.json + .env
+  llm/
+    client.py              # LangChain + Portkey wrapper
+    prompts.py             # system prompt + per-environment prompt
   core/
-    models/          # Pydantic data models (Host, Credential, Subnet, …)
-    services/        # EnvironmentState · AttackGraph · CncService · ExfilReceiver
-    agents/          # deterministic task agents (Scan, LateralMove, FindInfo, Exfil)
-    actions/         # low-level command runners (WebShell, SshRunner, CncRunner)
-    strategy/        # equifax_baseline.py (done) · llm_strategy.py (Stage 4)
-equifax/
-  docker-compose.yml            # flat labnet (baseline reference)
-  docker-compose.segmented.yml  # paper-faithful segmented topology
-  redeploy_relay.sh             # one-shot Caldera P2P relay + agent deploy
-  attacker/                     # attacker container (runs Incalmo code)
-  webserver/                    # Struts2 target (CVE-2017-5638)
-  database/                     # database target (holds data.json)
-output/                         # exfiltrated loot (gitignored)
-tests/                          # pytest suite
-docs/                           # paper notes and replication checklist
+    models/                # Pydantic: Host, Credential, Subnet, Vulnerability
+    services/
+      environment_state_service.py   # structured network knowledge base
+      attack_graph_service.py        # BFS path-finding (attack + exfil routes)
+      cnc_service.py                 # Caldera REST API wrapper
+      exfil_receiver.py              # HTTP receiver for pushed data
+    actions/
+      high_level.py        # 5 task functions the LLM calls
+      low_level.py         # WebShell / SshRunner / CncRunner
+    agents/
+      scan_agent.py        # nmap → structured Host objects
+      lateral_move_agent.py  # exploit → deploy Sandcat → CncRunner
+      find_info_agent.py   # SSH key / credential discovery
+      exfiltrate_agent.py  # multi-hop ncat relay + HTTP push
+  baselines/
+    expert_prompt_shell.py  # baseline: LLM drives raw shell commands
+
+config/
+  config-equifax.json      # Equifax environment settings + Caldera key
+  config-chain4.json       # Chain-4 settings + Caldera key
+  config-chain6.json       # Chain-6 settings + Caldera key
+
+equifax/                   # Equifax Docker environment
+chain4/                    # Chain-4 Docker environment
+chain6/                    # Chain-6 Docker environment
+output/                    # exfiltrated data (gitignored)
+tests/                     # pytest suite (9/9 passing)
 ```
 
 ---
 
-## 7. Roadmap
+## 6. Roadmap
 
 | Stage | Description | Status |
 |---|---|---|
-| 0–3 | Data models, services, agents, Caldera C2 | ✅ done |
-| C.5 | Segmented network, P2P relay, attack graph, end-to-end | ✅ done (2026-06-27) |
-| 4 | LLM planning loop (LangChain + Portkey, `<task>/<query>/<finished>`) | ⬜ next |
-| 5 | 5-trial stability run, three metrics (Success / Reliability / TotalAcquisition) | ⬜ |
-| 6 | Second environment (4-Layer Chain + privilege escalation) | ⬜ |
-| 7 | Baselines + ablations (ExpertPromptShell, Incalmo-WHT, Incalmo-WS, cross-model) | ⬜ |
+| 0–3 | Data models, services, agents, Caldera C2 integration | ✅ |
+| C.5 | Segmented network, multi-hop relay, attack graph | ✅ |
+| 4 | LLM planning loop, three environments end-to-end | ✅ |
+| 5 | ExpertPromptShell baseline | ✅ |
+| 6 | More environments (Star, Dumbbell topologies) | ⬜ |
+| 7 | Multi-trial evaluation (5 runs per env), full metrics | ⬜ |
+| 8 | Additional baselines (CyberSecEval3, Caldera non-LLM) | ⬜ |
 
 ---
 
-## 8. License & disclaimer
+## 7. License & Disclaimer
 
 Research / educational use only. Do not run any part of this system against
 infrastructure you do not own or are not explicitly authorized to test.
