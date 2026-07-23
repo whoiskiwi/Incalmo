@@ -16,7 +16,8 @@
     "intnet": "10.23.0.0/24",
     "attacker_ip": "10.20.0.50",
     "web_intnet_ip": "10.23.0.1",
-    "extnet_docker": "chain_net0"
+    "extnet_docker": "chain_net0",
+    "caldera_url": "http://10.20.0.10:8888"
   },
   "goal": "Exfiltrate the sensitive data on the crown-jewel host back to the attacker host.",
   "output_dir": "output"

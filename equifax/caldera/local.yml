@@ -1,0 +1,13 @@
+api_key_blue: $argon2id$v=19$m=65536,t=3,p=4$fBRiCyHOW91F75MurhkOvw$6FI40EpNIEsUg7/sqkLv4pZbmbqyfdlAUZn/pIkakNU
+api_key_red: $argon2id$v=19$m=65536,t=3,p=4$bonZ21pyS6S86ge8mcmE0g$1clqjvNKNh5bd0rMmjBVDscweLfnC6HynDJbOhKd4S0
+app.contact.http: http://10.0.0.10:8888
+crypt_salt: incalmo-lab-salt
+encryption_key: ADMIN123
+exfil_dir: /tmp/caldera-exfil
+host: 0.0.0.0
+plugins:
+- access
+- atomic
+- sandcat
+- stockpile
+port: 8888

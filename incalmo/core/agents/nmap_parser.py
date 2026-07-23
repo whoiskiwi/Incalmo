@@ -16,9 +16,24 @@ KNOWN_VULNERABILITIES = {
         exploit_available=True,
         exploit_path="exploit/multi/http/struts2_content_type_ognl"
     ),
-    # More vulnerabilities can be added later.
-    # ("sudo", "1.8"): Vulnerability(cve_id="CVE-2021-3156", ...)
 }
+
+# Host-level fingerprint: if a host has ALL of these ports open, inject this vuln.
+# Tomcat + AJP together = Struts servlet container (unique to the lab webserver).
+HOST_FINGERPRINTS = [
+    {
+        "required_ports": {8009, 8080},   # AJP + HTTP both present
+        "product_keyword": "ajp13",        # AJP service name unique to Tomcat
+        "vulnerability": Vulnerability(
+            cve_id="CVE-2017-5638",
+            service="apache-struts",
+            port=8080,
+            description="Apache Struts remote code execution vulnerability",
+            exploit_available=True,
+            exploit_path="exploit/multi/http/struts2_content_type_ognl"
+        ),
+    },
+]
 
 class NmapParser:
     """
@@ -91,10 +106,10 @@ class NmapParser:
                     service_name = "unknown"
                     service_version = None
 
+                    product = ""
                     if service_elem is not None:
                         service_name = service_elem.get("name", "unknown")
 
-                        # The version may live in the product or version field
                         product = service_elem.get("product", "")
                         version = service_elem.get("version", "")
                         if version:
@@ -111,12 +126,24 @@ class NmapParser:
                     services.append(service)
 
                     # Compare against the vuln database to check for known vulns
+                    # Pass product so Tomcat-style fingerprints can be matched
                     vuln = self._check_vulnerability(
                         service_name,
                         service_version,
-                        port_number
+                        port_number,
+                        product=product,
                     )
                     if vuln:
+                        vulnerabilities.append(vuln)
+
+            # Host-level fingerprint check (e.g. Tomcat+AJP = Struts)
+            open_ports = {s.port for s in services}
+            service_names = " ".join(s.name for s in services).lower()
+            for fp in HOST_FINGERPRINTS:
+                if fp["required_ports"].issubset(open_ports) and \
+                        fp["product_keyword"] in service_names:
+                    vuln = fp["vulnerability"]
+                    if not any(v.cve_id == vuln.cve_id for v in vulnerabilities):
                         vulnerabilities.append(vuln)
 
             # Build the Host object
@@ -133,29 +160,34 @@ class NmapParser:
         self,
         service_name: str,
         version: str | None,
-        port: int
+        port: int,
+        product: str = "",
     ) -> Vulnerability | None:
         """
         Check whether a service has a known vulnerability.
-        Compares against the KNOWN_VULNERABILITIES dict.
-
-        Matching logic:
-        service name matches + version prefix matches.
-        For example: version="2.3.15" matches the "2.3" in the key.
+        Matches on service_name OR product string, then version prefix.
+        Empty vuln_version matches any version.
         """
-        if not version:
-            return None
+        fingerprint = f"{service_name} {product}".lower()
 
         for (vuln_service, vuln_version), vuln in \
                 KNOWN_VULNERABILITIES.items():
 
-            # Service name match (case-insensitive)
-            if vuln_service.lower() not in service_name.lower():
+            if vuln_service.lower() not in fingerprint:
                 continue
 
-            # Version prefix match
-            if version.startswith(vuln_version):
-                # Update the vuln's port to the port actually scanned
+            # Empty vuln_version matches any version
+            if vuln_version == "":
+                return Vulnerability(
+                    cve_id=vuln.cve_id,
+                    service=vuln.service,
+                    port=port,
+                    description=vuln.description,
+                    exploit_available=vuln.exploit_available,
+                    exploit_path=vuln.exploit_path
+                )
+
+            if version and version.startswith(vuln_version):
                 return Vulnerability(
                     cve_id=vuln.cve_id,
                     service=vuln.service,

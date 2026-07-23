@@ -15,6 +15,7 @@ _CONFIG_PATH = Path(os.environ.get("INCALMO_CONFIG", str(_DEFAULT_CONFIG)))
 class Settings:
     portkey_api_key: str = ""
     caldera_api_key: str = ""
+    caldera_url: str = "http://host.docker.internal:8888"
     model: str = "@openai/gpt-4o"
     attacker_ip: str = "10.0.0.50"
     extnet: str = "10.0.0.0/24"
@@ -50,6 +51,7 @@ def load_settings() -> Settings:
         s.attacker_ip = network.get("attacker_ip", s.attacker_ip)
         s.web_intnet_ip = network.get("web_intnet_ip", s.web_intnet_ip)
         s.extnet_docker = network.get("extnet_docker", s.extnet_docker)
+        s.caldera_url = network.get("caldera_url", os.environ.get("CALDERA_URL", s.caldera_url))
 
         target = cfg.get("target", {})
         s.data_path = target.get("data_path", s.data_path)

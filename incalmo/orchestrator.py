@@ -128,7 +128,7 @@ def run_orchestrator():
 
     # ── Services ──────────────────────────────────────────────────────────
     env   = EnvironmentStateService(attacker_ip=settings.attacker_ip)
-    cnc   = CncService()
+    cnc   = CncService(base_url=settings.caldera_url)
     graph = AttackGraphService(env)
 
     # Seed the two known subnets so the attack graph has a starting topology
@@ -137,7 +137,8 @@ def run_orchestrator():
 
     # ── Agents ────────────────────────────────────────────────────────────
     scan_agent    = ScanAgent(env)
-    lateral_agent = LateralMoveAgent(env, cnc, docker_extnet=settings.extnet_docker)
+    lateral_agent = LateralMoveAgent(env, cnc, docker_extnet=settings.extnet_docker,
+                                     caldera_direct_url=settings.caldera_url)
     findinfo_agent = FindInfoAgent(env)
     exfil_agent   = ExfiltrateAgent(env)
 

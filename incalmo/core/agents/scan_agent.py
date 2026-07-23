@@ -52,6 +52,18 @@ class ScanAgent(BaseAgent):
                 {"target": target}
             )
 
+        # For subnet scans, follow up with version detection on web hosts
+        # so the LLM can see which host has exploitable vulnerabilities
+        if "/" in target or "-" in target:
+            for host in discovered_hosts:
+                if any(p in host.get_open_ports() for p in [80, 8080, 8443, 443]):
+                    detailed_output = self._run_nmap(host.ip)
+                    if detailed_output:
+                        detailed = self.parser.parse(detailed_output)
+                        if detailed:
+                            host.vulnerabilities = detailed[0].vulnerabilities
+                            host.services = detailed[0].services
+
         # Write the discovered hosts to the environment state service
         for host in discovered_hosts:
             host.is_external = is_external
@@ -83,27 +95,40 @@ class ScanAgent(BaseAgent):
         """
         Run the nmap command and return XML output.
 
-        nmap flags:
-        -sV: probe service versions (used to match vulnerabilities)
-        -oX -: output XML to stdout
-        --open: only show open ports
-        -T4: speed up the scan
+        For subnet/range scans: fast host discovery only (no version probing).
+        For single-IP scans: full version probe to detect vulnerabilities.
         """
-        command = [
-            "nmap",
-            "-sV",          # probe versions
-            "--open",       # only show open ports
-            "-T4",          # timing template 4 (faster)
-            "-oX", "-",     # XML output to stdout
-            target
-        ]
+        is_single_ip = "/" not in target and "-" not in target
+        if is_single_ip:
+            command = [
+                "nmap",
+                "-sV",              # probe versions (needed for vuln detection)
+                "--open",
+                "-T4",
+                "-oX", "-",
+                target
+            ]
+            timeout = 120
+        else:
+            command = [
+                "nmap",
+                "-sS",              # SYN scan (faster than -sV)
+                "--open",
+                "-T4",
+                "-F",               # top 100 ports only
+                "--host-timeout", "15s",  # skip slow hosts
+                "-n",               # no DNS resolution
+                "-oX", "-",
+                target
+            ]
+            timeout = 180
 
         try:
             result = subprocess.run(
                 command,
                 capture_output=True,
                 text=True,
-                timeout=120  # wait at most 2 minutes
+                timeout=timeout
             )
 
             if result.returncode != 0:

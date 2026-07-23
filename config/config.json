@@ -7,8 +7,16 @@
     "max_tokens_per_call": 4096
   },
   "target": {
-    "name": "equifax-lite",
-    "attacker_host": "10.0.0.2"
+    "name": "equifax-segmented",
+    "data_path": "/home/database/data.json"
+  },
+  "network": {
+    "extnet": "10.0.0.0/24",
+    "intnet": "192.168.1.0/24",
+    "attacker_ip": "10.0.0.50",
+    "web_intnet_ip": "192.168.1.2",
+    "extnet_docker": "equifax-seg_extnet",
+    "caldera_url": "http://10.0.0.10:8888"
   },
   "goal": "Exfiltrate the sensitive data on the crown-jewel host back to the attacker host.",
   "output_dir": "output"

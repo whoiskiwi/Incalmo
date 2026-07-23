@@ -13,14 +13,27 @@
 # ============================================================
 
 services:
+  caldera:
+    image: caldera:server
+    networks:
+      extnet:
+        ipv4_address: 10.0.0.10
+    ports:
+      - "8888:8888"
+    volumes:
+      - caldera_equifax_conf:/usr/src/app/conf
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8888"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
   database:
     build: ./database
     networks:
       intnet:
         ipv4_address: 192.168.1.100      # ONLY on the internal net
-    # db's Dockerfile installs curl/wget -> it can PUSH loot to the webserver
-    # during multi-hop exfil (C.5.4). It can NOT reach extnet, the attacker, or
-    # the Mac -- that isolation is the whole point.
 
   webserver:
     build: ./webserver
@@ -30,37 +43,37 @@ services:
       intnet:
         ipv4_address: 192.168.1.2
     ports:
-      - "8080:8080"                      # still exposed to the Mac for manual checks
+      - "8080:8080"
     depends_on:
       - database
-    # ⚠️ TODO(you): the webserver image BAKES ~/.ssh/config with
-    #    HostName 192.168.201.100  (see webserver/ssh/config) -- that is the FLAT-net
-    #    db address. In this range the db is 192.168.1.100, so FindInfo would learn
-    #    the wrong host. Fix ONE of:
-    #      (a) edit webserver/ssh/config -> HostName 192.168.1.100, then rebuild
-    #          (simplest, but changes the flat baseline image too -- rebuild both ranges), or
-    #      (b) make the HostName a Docker build ARG (per-range value), or
-    #      (c) bind-mount a segmented ssh/config over /opt/tomcat/.ssh/config here
-    #          (watch file ownership -> tomcat, mode 600).
 
-  attacker:                              # NEW: the real attacker box (no longer the Mac)
+  attacker:
     build:
       context: ./attacker
+    environment:
+      - INCALMO_CONFIG=/incalmo/config/config.json
+      - CALDERA_URL=http://10.0.0.10:8888
     networks:
       extnet:
         ipv4_address: 10.0.0.50
+    ports:
+      - "9000:9000"
     volumes:
-      - ../incalmo:/incalmo/incalmo:ro   # live code: edit on Mac, visible in here
-      - ../output:/incalmo/output        # loot lands here (shared back to the Mac)
-      - ../.env:/incalmo/.env:ro         # CALDERA_API_KEY etc.
-      - /var/run/docker.sock:/var/run/docker.sock  # Docker-in-Docker for WebShell/SshRunner
-    # Caldera runs on the Mac (localhost:8888). extnet is a normal bridge, so the
-    # attacker reaches it via host.docker.internal:8888.
-    # TODO(you): point CncService base_url at http://host.docker.internal:8888
-    # (the default is localhost:8888, which inside this container is the container itself).
+      - ../incalmo:/incalmo/incalmo:ro
+      - ../main.py:/incalmo/main.py:ro
+      - ../config:/incalmo/config:ro
+      - ../output:/incalmo/output
+      - ../.env:/incalmo/.env:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      caldera:
+        condition: service_healthy
     command: ["sleep", "infinity"]
+
+volumes:
+  caldera_equifax_conf:
 
 networks:
   extnet:                                # external: attacker <-> webserver

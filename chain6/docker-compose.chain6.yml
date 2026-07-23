@@ -1,0 +1,167 @@
+# 6-Layer Chain environment
+#
+# Topology:
+#   attacker (10.20.0.50)
+#     → net0: 10.20.0.0/24
+#       → host1 (10.20.0.2 / 10.21.0.1)   Struts exploit entry point
+#         → net1: 10.21.0.0/24
+#           → host2 (10.21.0.2 / 10.22.0.1)   SSH pivot
+#             → net2: 10.22.0.0/24
+#               → host3 (10.22.0.2 / 10.23.0.1)   SSH pivot
+#                 → net3: 10.23.0.0/24
+#                   → host4 (10.23.0.2 / 10.24.0.1)   SSH pivot
+#                     → net4: 10.24.0.0/24
+#                       → host5 (10.24.0.2 / 10.25.0.1)   SSH pivot
+#                         → net5: 10.25.0.0/24  [internal]
+#                           → host6 (10.25.0.2)   crown jewel data
+
+services:
+
+  caldera:
+    image: caldera:server
+    networks:
+      net0:
+        ipv4_address: 10.20.0.10
+    ports:
+      - "8888:8888"
+    volumes:
+      - caldera_chain6_conf:/usr/src/app/conf
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8888"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  attacker:
+    build:
+      context: ../equifax/attacker
+    environment:
+      - INCALMO_CONFIG=/incalmo/config/config-chain6.json
+      - CALDERA_URL=http://10.20.0.10:8888
+    networks:
+      net0:
+        ipv4_address: 10.20.0.50
+    ports:
+      - "9000:9000"
+    volumes:
+      - ../incalmo:/incalmo/incalmo:ro
+      - ../main.py:/incalmo/main.py:ro
+      - ../config:/incalmo/config:ro
+      - ../output:/incalmo/output
+      - ../.env:/incalmo/.env:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      caldera:
+        condition: service_healthy
+    command: ["sleep", "infinity"]
+
+  host1:
+    build:
+      context: ../chain/host1
+    networks:
+      net0:
+        ipv4_address: 10.20.0.2
+      net1:
+        ipv4_address: 10.21.0.1
+    depends_on:
+      - host2
+
+  host2:
+    build:
+      context: ../chain/host2
+    networks:
+      net1:
+        ipv4_address: 10.21.0.2
+      net2:
+        ipv4_address: 10.22.0.1
+    depends_on:
+      - host3
+
+  host3:
+    build:
+      context: ../chain/host3
+    networks:
+      net2:
+        ipv4_address: 10.22.0.2
+      net3:
+        ipv4_address: 10.23.0.1
+    depends_on:
+      - host4
+
+  host4:
+    build:
+      context: ./host4
+    networks:
+      net3:
+        ipv4_address: 10.23.0.2
+      net4:
+        ipv4_address: 10.24.0.1
+    depends_on:
+      - host5
+
+  host5:
+    build:
+      context: ./host5
+    networks:
+      net4:
+        ipv4_address: 10.24.0.2
+      net5:
+        ipv4_address: 10.25.0.1
+    depends_on:
+      - host6
+
+  host6:
+    build:
+      context: ./host6
+    networks:
+      net5:
+        ipv4_address: 10.25.0.2
+
+networks:
+  net0:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.20.0.0/24
+
+  net1:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.21.0.0/24
+          gateway: 10.21.0.254
+
+  net2:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.22.0.0/24
+          gateway: 10.22.0.254
+
+  net3:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.23.0.0/24
+          gateway: 10.23.0.254
+
+  net4:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.24.0.0/24
+          gateway: 10.24.0.254
+
+  net5:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.25.0.0/24
+          gateway: 10.25.0.254
+
+volumes:
+  caldera_chain6_conf:

